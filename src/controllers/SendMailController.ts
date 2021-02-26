@@ -6,6 +6,7 @@ import SurveyUserRepository from '../repositories/SurveyUserRepository'
 import { resolve } from 'path'
 
 import SendMailService from '../services/SendMailService'
+import { AppError } from '../errors/AppError'
 
 class SendMailController {
     async execute(request: Request, response: Response) {
@@ -20,7 +21,7 @@ class SendMailController {
         })
 
         if (!existsUser) {
-            return response.status(400).json({ error: 'User does not exists!' })
+            throw new AppError('User does not exists!')
         }
 
         const existsSurvey = await surveysRepository.findOne({
@@ -28,16 +29,14 @@ class SendMailController {
         })
 
         if (!existsSurvey) {
-            return response.status(400).json({ error: 'Survey does not exists!' })
+            throw new AppError('Survey does not exists!')
         }
 
         const path = resolve(__dirname, '..', 'views', 'emails', 'npsMail.hbs')
 
+
         const surveyUserExists = await surveysUsersRepository.findOne({
-            where: [
-                { user_id: existsUser.id },
-                { value: null }
-            ],
+            where: { user_id: existsUser.id, value: null },
             relations: ['user', 'survey']
         })
 
@@ -45,11 +44,12 @@ class SendMailController {
             name: existsUser.name,
             title: existsSurvey.title,
             description: existsSurvey.description,
-            user_id: existsUser.id,
+            id: '',
             link: process.env.URL_MAIL
         }
 
         if (surveyUserExists) {
+            variables.id = surveyUserExists.id
             await SendMailService.execute(email, existsSurvey.title, variables, path)
             return response.json(surveyUserExists)
         }
@@ -62,6 +62,8 @@ class SendMailController {
         })
 
         await surveysUsersRepository.save(surveyUser)
+
+        variables.id = surveyUser.id
 
         await SendMailService.execute(email, existsSurvey.title, variables, path)
 
